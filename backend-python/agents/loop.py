@@ -83,7 +83,7 @@ async def run_loop(run_id: str) -> None:
                 try:
                     # ── 2. Architect ───────────────────────────────────────────
                     _write_state(status="architect_running")
-                    pdb_path = await run_architect(run_id, iteration, strategy)
+                    pdb_path, boltz_scores = await run_architect(run_id, iteration, strategy)
 
                     # Detect if fallback was used (tamarind.py copies mock file)
                     mock_src = BASE_DIR / "outputs" / "mock_fallbacks" / "cxcl12_success.pdb"
@@ -99,7 +99,7 @@ async def run_loop(run_id: str) -> None:
 
                     # ── 4. Critic ──────────────────────────────────────────────
                     _write_state(status="critic_running")
-                    critique = evaluate(pdb_path, run_id=run_id)
+                    critique = evaluate(pdb_path, run_id=run_id, iteration=iteration, boltz_scores=boltz_scores)
                     break  # success — exit retry loop
 
                 except (TamarindTimeoutError, TamarindFailedError, json.JSONDecodeError, ValidationError) as e:
@@ -140,12 +140,13 @@ async def run_loop(run_id: str) -> None:
                 continue
 
             # Update metrics in state
-            _write_state(
-                metrics={
-                    "plddt_mean": critique["plddt_mean"],
-                    "steric_clashes": critique["steric_clashes"],
-                }
-            )
+            metrics = {
+                "plddt_mean": critique["plddt_mean"],
+                "steric_clashes": critique["steric_clashes"],
+            }
+            if critique.get("iptm") is not None:
+                metrics["iptm"] = critique["iptm"]
+            _write_state(metrics=metrics)
 
             if critique["pass"]:
                 # ── Success ────────────────────────────────────────────────────

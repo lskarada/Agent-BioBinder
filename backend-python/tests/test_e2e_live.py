@@ -58,6 +58,7 @@ def strategy():
 
 # ── E2E Test ───────────────────────────────────────────────────────────────────
 
+@pytest.mark.live
 @pytest.mark.asyncio
 async def test_e2e_architect_full_pipeline(strategy, tmp_path, capsys):
     """
@@ -101,7 +102,7 @@ async def test_e2e_architect_full_pipeline(strategy, tmp_path, capsys):
         # ── Step 1: Claude call (Strategist constraints → RFdiffusion settings) ──
         print(f"\n[1/4] Claude (sonnet-4-6): translating design constraints...")
         t0 = time.monotonic()
-        pdb_path = await A.run_architect(run_id, iteration, strategy)
+        pdb_path, boltz_scores = await A.run_architect(run_id, iteration, strategy)
         elapsed_total = time.monotonic() - t0
         print(f"      ✓ Completed in {elapsed_total:.1f}s")
 

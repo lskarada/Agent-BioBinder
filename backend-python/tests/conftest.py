@@ -1,5 +1,5 @@
 """
-Shared fixtures for all agent test suites (Strategist, Architect, Tamarind).
+Shared fixtures for all agent test suites (Strategist, Architect, Tamarind, Critic).
 """
 from __future__ import annotations
 
@@ -166,6 +166,38 @@ def mock_claude():
 
     with patch("anthropic.AsyncAnthropic", return_value=mock_client):
         yield mock_client
+
+
+# ── Critic PDB string fixtures ─────────────────────────────────────────────────
+
+PASSING_PDB = """\
+ATOM      1  CA  ALA A   1       1.000   1.000   1.000  1.00 85.00           C
+ATOM      2  CA  ALA A   2       5.000   5.000   5.000  1.00 85.00           C
+END
+"""
+
+LOW_PLDDT_PDB = """\
+ATOM      1  CA  ALA A   1       1.000   1.000   1.000  1.00 60.00           C
+ATOM      2  CA  ALA A   2       5.000   5.000   5.000  1.00 60.00           C
+END
+"""
+
+CLASH_PDB = """\
+ATOM      1  CA  ALA A   1       1.000   1.000   1.000  1.00 85.00           C
+ATOM      2  CA  ALA A   2       5.000   5.000   5.000  1.00 85.00           C
+ATOM      3  CA  ALA A   3       1.000   1.001   1.000  1.00 85.00           C
+END
+"""
+# atoms[0] and atoms[2] are < 1.5 Å apart → 1 clash (skip logic skips i+1 only)
+
+
+@pytest.fixture()
+def tmp_logs_critic(tmp_path, monkeypatch):
+    import critic.evaluator as evaluator_mod
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    monkeypatch.setattr(evaluator_mod, "LOGS_DIR", logs_dir)
+    return logs_dir
 
 
 # ── httpx mock helpers ─────────────────────────────────────────────────────────

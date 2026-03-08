@@ -149,8 +149,8 @@ class TestRunArchitectFallback:
         with patch("tools.tamarind.PDBS_DIR", tmp_path), \
              patch("tools.tamarind.LOGS_DIR", tmp_path), \
              patch.object(A, "LOGS_DIR", tmp_path):
-            path = await A.run_architect("run_f01", 1, strategy)
-        assert isinstance(path, str)
+            pdb_path, _ = await A.run_architect("run_f01", 1, strategy)
+        assert isinstance(pdb_path, str)
 
     async def test_returned_pdb_exists_on_disk(self, tmp_path, env_fallback, mock_claude):
         """PRD §18: file must exist at the returned path."""
@@ -158,8 +158,8 @@ class TestRunArchitectFallback:
         with patch("tools.tamarind.PDBS_DIR", tmp_path), \
              patch("tools.tamarind.LOGS_DIR", tmp_path), \
              patch.object(A, "LOGS_DIR", tmp_path):
-            path = await A.run_architect("run_f02", 1, strategy)
-        assert Path(path).exists()
+            pdb_path, _ = await A.run_architect("run_f02", 1, strategy)
+        assert Path(pdb_path).exists()
 
     async def test_output_filename_matches_prd_contract(self, tmp_path, env_fallback, mock_claude):
         """PRD §18: filename must be {run_id}_iter_{n}.pdb."""
@@ -167,8 +167,8 @@ class TestRunArchitectFallback:
         with patch("tools.tamarind.PDBS_DIR", tmp_path), \
              patch("tools.tamarind.LOGS_DIR", tmp_path), \
              patch.object(A, "LOGS_DIR", tmp_path):
-            path = await A.run_architect("run_f03", 2, strategy)
-        assert Path(path).name == "run_f03_iter_2.pdb"
+            pdb_path, _ = await A.run_architect("run_f03", 2, strategy)
+        assert Path(pdb_path).name == "run_f03_iter_2.pdb"
 
     async def test_writes_log_entries(self, tmp_path, env_fallback, mock_claude):
         """PRD §15: architect must write log entries during execution."""
@@ -301,9 +301,9 @@ class TestRunArchitectLive:
              patch("agents.architect.run_pipeline", new=mock_pipeline), \
              patch.object(A, "LOGS_DIR", tmp_path):
             MockAnthropic.return_value.messages.create = mock_create
-            result = await A.run_architect("run_l04", 1, strategy)
+            pdb_path, _ = await A.run_architect("run_l04", 1, strategy)
 
-        assert result == expected
+        assert pdb_path == expected
 
     async def test_handles_claude_garbage_json_gracefully(self, tmp_path, env_live, mock_pdb_bytes):
         """If Claude returns invalid JSON, architect must fall back to default settings."""
@@ -317,9 +317,9 @@ class TestRunArchitectLive:
              patch("agents.architect.run_pipeline", new=mock_pipeline), \
              patch.object(A, "LOGS_DIR", tmp_path):
             MockAnthropic.return_value.messages.create = mock_create
-            result = await A.run_architect("run_l05", 1, strategy)
+            pdb_path, _ = await A.run_architect("run_l05", 1, strategy)
 
-        assert result == expected  # must not raise
+        assert pdb_path == expected  # must not raise
 
     async def test_strategy_constraints_propagate_to_pipeline(self, tmp_path, env_live, mock_pdb_bytes):
         """Binder length from Strategist must reach the RFdiffusion settings."""
@@ -375,8 +375,8 @@ class TestIterationBoundaries:
             with patch("tools.tamarind.PDBS_DIR", tmp_path), \
                  patch("tools.tamarind.LOGS_DIR", tmp_path), \
                  patch.object(A, "LOGS_DIR", tmp_path):
-                path = await A.run_architect(f"run_iter_{iteration}", iteration, strategy)
-            paths.append(Path(path).name)
+                pdb_path, _ = await A.run_architect(f"run_iter_{iteration}", iteration, strategy)
+            paths.append(Path(pdb_path).name)
 
         # All three must be distinct filenames
         assert len(set(paths)) == 3
@@ -388,5 +388,5 @@ class TestIterationBoundaries:
             with patch("tools.tamarind.PDBS_DIR", tmp_path), \
                  patch("tools.tamarind.LOGS_DIR", tmp_path), \
                  patch.object(A, "LOGS_DIR", tmp_path):
-                path = await A.run_architect(f"run_boundary_{i}", i, strategy)
-            assert Path(path).exists()
+                pdb_path, _ = await A.run_architect(f"run_boundary_{i}", i, strategy)
+            assert Path(pdb_path).exists()

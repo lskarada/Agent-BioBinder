@@ -131,12 +131,13 @@ def _parse_rfd_settings(text: str, fallback_min: int, fallback_max: int, default
 
 # ── Main entry point ────────────────────────────────────────────────────────────
 
-async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput) -> str:
+async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput) -> tuple[str, dict | None]:
     """
     Orchestrates: Claude(settings) → RFdiffusion → ProteinMPNN → Boltz.
 
-    Returns the local filesystem path to the Boltz complex PDB.
-    Interface is unchanged: always returns a str path that the Critic can open.
+    Returns a tuple of (pdb_path, boltz_scores) where:
+    - pdb_path is the local filesystem path to the Boltz complex PDB
+    - boltz_scores is a dict with Boltz scoring metrics (e.g. iptm), or None if unavailable
     """
     # ── 0. Load target info from literature (no hardcoded biology) ──────────────
     literature = _load_literature()
@@ -235,4 +236,4 @@ async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput)
             event="pipeline_done",
         )
 
-    return pdb_path
+    return pdb_path, boltz_scores
