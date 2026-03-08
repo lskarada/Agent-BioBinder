@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 load_dotenv()
 
+DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
+
 app = FastAPI(title="Agent Binder API")
 
 app.add_middleware(
@@ -87,12 +89,17 @@ async def start_loop(req: StartLoopRequest, background_tasks: BackgroundTasks):
     if current.get("status", "idle") not in ("idle", "completed_success_live", "completed_success_fallback", "completed_failure", "error"):
         raise HTTPException(status_code=409, detail="A run is already in progress")
 
-    run_id = "run_" + uuid.uuid4().hex[:8]
+    prefix = "demo_" if DEMO_MODE else "run_"
+    run_id = prefix + uuid.uuid4().hex[:8]
     state = initial_state(run_id)
     write_state(state)
 
-    from agents.loop import run_loop
-    background_tasks.add_task(run_loop, run_id)
+    if DEMO_MODE:
+        from demo.demo_runner import run_demo_loop
+        background_tasks.add_task(run_demo_loop, run_id)
+    else:
+        from agents.loop import run_loop
+        background_tasks.add_task(run_loop, run_id)
 
     return StartLoopResponse(run_id=run_id, status="started")
 
