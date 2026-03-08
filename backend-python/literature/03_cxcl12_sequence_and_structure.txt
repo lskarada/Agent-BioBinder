@@ -1,0 +1,42 @@
+CXCL12 Sequence, Structure, and Tamarind Input Reference
+=========================================================
+Source: UniProt P10145 (CXCL12_HUMAN), PDB 1SDF (chain A, mature form)
+
+TARGET IDENTITY
+---------------
+Protein    : CXCL12 (SDF-1α), human mature form
+UniProt    : P10145
+PDB ID     : 1SDF
+Chain      : A
+Local file : cxcl12.pdb
+
+CANONICAL SEQUENCE (mature form, 68 residues)
+----------------------------------------------
+KPVSLSYRCPCRFFESHVARANTSGRKTSIINLTTLHQLSRKALNCRITEELIQKLESDGPHQVLDYVQEG
+
+Residue numbering follows the mature protein (Lys1 = first residue after
+signal peptide cleavage). This sequence is the Boltz target input.
+
+TAMARIND HOTSPOT RESIDUE NUMBERS
+----------------------------------
+Hotspots are specified as bare integers (chain letter provided separately).
+Chain A is the only chain in cxcl12.pdb.
+
+Primary anchor zone (sTyr21-recognition cleft):
+  18   (Val18)
+  47   (Arg47)
+  49   (Val49)
+
+Secondary extension zone (adjacent hydrophobic patch):
+  10   (Pro10)
+  29   (Leu29)
+  39   (Val39)
+
+TAMARIND JOB PARAMETERS
+------------------------
+targetChains : ["A"]
+pdbFile      : cxcl12.pdb
+Default primary hotspots  : "18 47 49"
+Default secondary hotspots: "10 29 39"
+Include secondary hotspots when topology_hint is "helical" or
+desired_flexibility is "rigid".

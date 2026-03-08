@@ -104,7 +104,7 @@ async def run_strategist(run_id: str, iteration: int, previous_feedback: str | N
 
     _append_log(
         run_id,
-        f"Anchoring design around sTyr21-recognition cleft. "
+        f"Constraints generated. "
         f"Binder length {result.design_constraints.min_length}–"
         f"{result.design_constraints.max_length}. "
         f"Rationale: {result.rationale}",

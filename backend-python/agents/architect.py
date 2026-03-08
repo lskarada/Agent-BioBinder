@@ -2,9 +2,10 @@
 Architect agent — pure execution engine.
 
 Responsibilities:
-  1. Uses Claude to translate Strategist constraints into RFdiffusion settings.
-  2. Runs the full Tamarind pipeline: RFdiffusion → ProteinMPNN → Boltz.
-  3. Saves the Boltz complex PDB and an affinity sidecar JSON locally.
+  1. Reads target info (sequence, hotspot numbers, PDB filename) from literature/.
+  2. Uses Claude to translate Strategist constraints into RFdiffusion settings.
+  3. Runs the full Tamarind pipeline: RFdiffusion → ProteinMPNN → Boltz.
+  4. Saves the Boltz complex PDB and a scoring sidecar JSON locally.
 
 Returns the path to the final PDB so the Critic can evaluate it.
 """
@@ -23,37 +24,75 @@ from tools.tamarind import TamarindFailedError, TamarindTimeoutError, run_pipeli
 
 LOGS_DIR = Path(__file__).parent.parent / "outputs" / "logs"
 TARGET_PDBS_DIR = Path(__file__).parent.parent / "target_pdbs"
+LITERATURE_DIR = Path(__file__).parent.parent / "literature"
 
-# ── CXCL12 canonical sequence (human mature form, UniProt P10145) ─────────────
-# Used as the target input for Boltz affinity prediction.
-# Residues: Val18, Arg47, Val49 form the sTyr21-recognition cleft (primary anchor zone).
-CXCL12_SEQUENCE = (
-    "KPVSLSYRCPCRFFESHVARANTSGRKTSIINLTTLHQLSRKALNCRITEELIQKLES"
-    "DGPHQVLDYVQEG"
-)
 
-# ── Claude prompt ──────────────────────────────────────────────────────────────
+# ── Literature parsing ──────────────────────────────────────────────────────────
 
-_SYSTEM_PROMPT = """You are a structural design engineer translating Strategist constraints into Tamarind RFdiffusion settings.
+def _load_literature() -> str:
+    """Return all literature/*.txt content concatenated."""
+    if not LITERATURE_DIR.exists():
+        return ""
+    texts = []
+    for path in sorted(LITERATURE_DIR.glob("*.txt")):
+        texts.append(f"=== {path.name} ===\n{path.read_text().strip()}")
+    return "\n\n".join(texts)
 
-Target: CXCL12 (chain A). Primary hotspots: A18, A47, A49 (sTyr21-recognition cleft).
-Secondary hotspots: A10, A29, A39 (adjacent hydrophobic patch).
+
+def _extract_target_sequence(literature: str) -> str | None:
+    """
+    Parse the canonical target sequence from the literature.
+    Looks for a single-line uppercase amino-acid string of ≥20 chars
+    under a heading that mentions 'sequence'.
+    """
+    for line in literature.splitlines():
+        line = line.strip()
+        if len(line) >= 20 and re.fullmatch(r"[ACDEFGHIKLMNPQRSTVWY]+", line):
+            return line
+    return None
+
+
+def _extract_pdb_filename(literature: str) -> str | None:
+    """Parse 'Local file : <name>.pdb' from literature."""
+    match = re.search(r"Local file\s*:\s*(\S+\.pdb)", literature)
+    return match.group(1) if match else None
+
+
+def _extract_default_hotspots(literature: str) -> str:
+    """Parse 'Default primary hotspots : <numbers>' from literature."""
+    match = re.search(r"Default primary hotspots\s*:\s*\"([^\"]+)\"", literature)
+    return match.group(1) if match else "18 47 49"
+
+
+# ── Claude system prompt (generic — no hardcoded target biology) ───────────────
+
+def _build_system_prompt(literature: str) -> str:
+    return f"""You are a structural design engineer translating Strategist constraints into Tamarind RFdiffusion settings.
+
+Use the literature below to determine the correct chain, hotspot residue numbers, and any target-specific rules.
+The Strategist names residues like "VAL18" or "ARG47" — strip the amino-acid prefix to get bare residue numbers for binderHotspots.
 
 Output ONLY a JSON object (no markdown fences) matching this exact schema:
-{
+{{
   "task": "Binder Design",
-  "targetChains": ["A"],
+  "targetChains": ["<chain>"],
   "binderLength": "<min>-<max>",
-  "binderHotspots": {"A": "<space-separated residue numbers>"},
+  "binderHotspots": {{"<chain>": "<space-separated residue numbers>"}},
   "numDesigns": 1
-}
+}}
 
 Rules:
 - binderLength must be a range string like "10-15"
-- binderHotspots["A"] must be space-separated integers, e.g. "18 47 49"
-- Include secondary hotspots only when topology_hint is "helical" or flexibility is "rigid"
-- numDesigns is always 1"""
+- binderHotspots must use bare integers separated by spaces, e.g. "18 47 49"
+- Use primary anchor zone residues as hotspots by default
+- Include secondary extension zone residues only when topology_hint is "helical" or flexibility is "rigid"
+- numDesigns is always 1
 
+## Literature
+{literature}"""
+
+
+# ── Logging ────────────────────────────────────────────────────────────────────
 
 def _append_log(run_id: str, message: str, event: str = "info", level: str = "info") -> None:
     log_file = LOGS_DIR / f"{run_id}.jsonl"
@@ -68,12 +107,11 @@ def _append_log(run_id: str, message: str, event: str = "info", level: str = "in
         f.write(json.dumps(entry) + "\n")
 
 
-def _parse_rfd_settings(text: str, fallback_min: int, fallback_max: int) -> dict:
+def _parse_rfd_settings(text: str, fallback_min: int, fallback_max: int, default_hotspots: str) -> dict:
     """
     Extract RFdiffusion settings dict from Claude's response.
-    Falls back to sensible defaults if JSON cannot be parsed.
+    Falls back to literature-derived defaults if JSON cannot be parsed.
     """
-    # Try bare JSON first, then fenced block
     for pattern in (r"\{.*\}", r"```(?:json)?\s*(.*?)\s*```"):
         match = re.search(pattern, text, re.DOTALL)
         if match:
@@ -82,17 +120,16 @@ def _parse_rfd_settings(text: str, fallback_min: int, fallback_max: int) -> dict
             except json.JSONDecodeError:
                 continue
 
-    _default_hotspots = "18 47 49"
     return {
         "task": "Binder Design",
         "targetChains": ["A"],
         "binderLength": f"{fallback_min}-{fallback_max}",
-        "binderHotspots": {"A": _default_hotspots},
+        "binderHotspots": {"A": default_hotspots},
         "numDesigns": 1,
     }
 
 
-# ── Main entry point ───────────────────────────────────────────────────────────
+# ── Main entry point ────────────────────────────────────────────────────────────
 
 async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput) -> str:
     """
@@ -101,14 +138,33 @@ async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput)
     Returns the local filesystem path to the Boltz complex PDB.
     Interface is unchanged: always returns a str path that the Critic can open.
     """
+    # ── 0. Load target info from literature (no hardcoded biology) ──────────────
+    literature = _load_literature()
+    target_sequence = _extract_target_sequence(literature)
+    pdb_filename = _extract_pdb_filename(literature) or "target.pdb"
+    default_hotspots = _extract_default_hotspots(literature)
+
+    if target_sequence is None:
+        raise ValueError(
+            "Could not extract target sequence from literature/. "
+            "Add a file containing the sequence as a standalone uppercase line."
+        )
+
+    _append_log(
+        run_id,
+        f"Loaded target from literature: pdb={pdb_filename}, "
+        f"seq_len={len(target_sequence)}, default_hotspots='{default_hotspots}'",
+        event="literature_loaded",
+    )
+
     constraints = strategy.design_constraints
-    # DesignConstraints is a Pydantic model — use attribute access
     min_len: int = constraints.min_length
     max_len: int = constraints.max_length
 
-    # ── 1. Ask Claude to translate Strategist constraints → RFdiffusion settings
+    # ── 1. Ask Claude to translate Strategist constraints → RFdiffusion settings ─
     _append_log(run_id, f"Calling Claude to derive RFdiffusion settings (iter {iteration})", event="start")
 
+    system_prompt = _build_system_prompt(literature)
     claude = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     constraints_dict = constraints.model_dump()
     binding_dict = strategy.binding_hypothesis.model_dump()
@@ -122,12 +178,12 @@ async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput)
     response = await claude.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=512,
-        system=_SYSTEM_PROMPT,
+        system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )
     claude_text = response.content[0].text
 
-    rfd_settings = _parse_rfd_settings(claude_text, min_len, max_len)
+    rfd_settings = _parse_rfd_settings(claude_text, min_len, max_len, default_hotspots)
 
     _append_log(
         run_id,
@@ -136,8 +192,8 @@ async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput)
         event="settings_derived",
     )
 
-    # ── 2. Run the full Tamarind pipeline (RFdiffusion → ProteinMPNN → Boltz) ──
-    target_pdb_path = str(TARGET_PDBS_DIR / "cxcl12.pdb")
+    # ── 2. Run the full Tamarind pipeline (RFdiffusion → ProteinMPNN → Boltz) ───
+    target_pdb_path = str(TARGET_PDBS_DIR / pdb_filename)
 
     _append_log(
         run_id,
@@ -151,7 +207,7 @@ async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput)
             run_id=run_id,
             iteration=iteration,
             target_pdb_path=target_pdb_path,
-            target_sequence=CXCL12_SEQUENCE,
+            target_sequence=target_sequence,
             rfd_settings=rfd_settings,
         )
     except (TamarindTimeoutError, TamarindFailedError) as e:

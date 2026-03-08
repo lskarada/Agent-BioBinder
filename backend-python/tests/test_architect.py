@@ -46,32 +46,47 @@ def make_strategy(min_length: int = 10, max_length: int = 15):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 1. CXCL12 SEQUENCE  (PRD §8.1, §8.2)
+# 1. LITERATURE PARSING  (sequence and hotspots read from literature/, not hardcoded)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestCxcl12Sequence:
-    def test_sequence_is_non_empty(self):
-        assert len(A.CXCL12_SEQUENCE) > 0
+_MOCK_LITERATURE = """
+=== 03_cxcl12_sequence_and_structure.txt ===
+Local file : cxcl12.pdb
+
+CANONICAL SEQUENCE (mature form, 68 residues)
+----------------------------------------------
+KPVSLSYRCPCRFFESHVARANTSGRKTSIINLTTLHQLSRKALNCRITEELIQKLESDGPHQVLDYVQEG
+
+Default primary hotspots  : "18 47 49"
+Default secondary hotspots: "10 29 39"
+"""
+
+class TestLiteratureParsing:
+    def test_extract_target_sequence_from_literature(self):
+        seq = A._extract_target_sequence(_MOCK_LITERATURE)
+        assert seq == "KPVSLSYRCPCRFFESHVARANTSGRKTSIINLTTLHQLSRKALNCRITEELIQKLESDGPHQVLDYVQEG"
 
     def test_sequence_reasonable_length(self):
-        """Human mature CXCL12α is ~68 residues; allow ±10 for isoform flexibility."""
-        assert 50 <= len(A.CXCL12_SEQUENCE) <= 100, (
-            f"CXCL12_SEQUENCE length {len(A.CXCL12_SEQUENCE)} is outside expected range"
-        )
+        seq = A._extract_target_sequence(_MOCK_LITERATURE)
+        assert 50 <= len(seq) <= 100
 
     def test_sequence_uppercase_amino_acids_only(self):
-        """Sequence must only contain standard uppercase amino-acid letters."""
+        seq = A._extract_target_sequence(_MOCK_LITERATURE)
         valid_aa = set("ACDEFGHIKLMNPQRSTVWY")
-        invalid = set(A.CXCL12_SEQUENCE) - valid_aa
-        assert not invalid, f"Invalid characters in CXCL12_SEQUENCE: {invalid}"
+        assert not (set(seq) - valid_aa)
 
     def test_sequence_contains_key_residues(self):
-        """
-        PRD §8.3: primary anchor zone includes Val18/Arg47/Val49.
-        The sequence must contain V, R (present in CXCL12) as a sanity check.
-        """
-        assert "V" in A.CXCL12_SEQUENCE
-        assert "R" in A.CXCL12_SEQUENCE
+        seq = A._extract_target_sequence(_MOCK_LITERATURE)
+        assert "V" in seq and "R" in seq
+
+    def test_extract_pdb_filename(self):
+        assert A._extract_pdb_filename(_MOCK_LITERATURE) == "cxcl12.pdb"
+
+    def test_extract_default_hotspots(self):
+        assert A._extract_default_hotspots(_MOCK_LITERATURE) == "18 47 49"
+
+    def test_returns_none_when_no_sequence(self):
+        assert A._extract_target_sequence("no sequence here") is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -87,7 +102,7 @@ class TestParseRfdSettings:
             "binderHotspots": {"A": "18 47 49"},
             "numDesigns": 1,
         })
-        result = A._parse_rfd_settings(json_str, 10, 15)
+        result = A._parse_rfd_settings(json_str, 10, 15, "18 47 49")
         assert result["binderLength"] == "10-15"
         assert result["binderHotspots"]["A"] == "18 47 49"
 
@@ -100,26 +115,26 @@ Here is the payload:
 ```
 I chose these hotspots because...
 """
-        result = A._parse_rfd_settings(text, 8, 12)
+        result = A._parse_rfd_settings(text, 8, 12, "18 47 49")
         assert result["binderLength"] == "8-12"
 
     def test_fallback_defaults_on_invalid_json(self):
         """If Claude returns garbage, architect must fall back to sensible defaults."""
-        result = A._parse_rfd_settings("sorry I cannot help with that", 10, 15)
+        result = A._parse_rfd_settings("sorry I cannot help with that", 10, 15, "18 47 49")
         assert "binderLength" in result
         assert result["binderLength"] == "10-15"
         assert "binderHotspots" in result
 
     def test_fallback_uses_primary_hotspots(self):
         """PRD §8.3: fallback hotspots must include the primary anchor residues."""
-        result = A._parse_rfd_settings("not json", 10, 15)
+        result = A._parse_rfd_settings("not json", 10, 15, "18 47 49")
         hotspot_str = str(result.get("binderHotspots", ""))
         # At minimum, residues 18, 47, 49 must be represented
         assert "18" in hotspot_str and "47" in hotspot_str and "49" in hotspot_str
 
     def test_binder_length_encodes_strategy_constraints(self):
         """binderLength must reflect min/max from Strategist output."""
-        result = A._parse_rfd_settings("garbage json", 8, 18)
+        result = A._parse_rfd_settings("garbage json", 8, 18, "18 47 49")
         assert result["binderLength"] == "8-18"
 
 
@@ -255,7 +270,7 @@ class TestRunArchitectLive:
         assert call_kwargs.get("model") == "claude-sonnet-4-6"
 
     async def test_passes_target_sequence_to_pipeline(self, tmp_path, env_live, mock_pdb_bytes):
-        """Boltz needs the target sequence — architect must pass CXCL12_SEQUENCE."""
+        """Boltz needs the target sequence — architect must read it from literature."""
         strategy = make_strategy()
         mock_create = AsyncMock(return_value=_mock_claude_response(VALID_RFD_JSON))
         mock_pipeline = AsyncMock(return_value=(str(tmp_path / "run_l03_iter_1.pdb"), None, None))
@@ -268,7 +283,11 @@ class TestRunArchitectLive:
             await A.run_architect("run_l03", 1, strategy)
 
         pipeline_kwargs = mock_pipeline.call_args[1]
-        assert pipeline_kwargs.get("target_sequence") == A.CXCL12_SEQUENCE
+        seq = pipeline_kwargs.get("target_sequence")
+        # Sequence must be a non-empty uppercase amino-acid string from literature
+        assert seq and len(seq) >= 20
+        assert seq == seq.upper()
+        assert all(c in "ACDEFGHIKLMNPQRSTVWY" for c in seq)
 
     async def test_returns_pdb_path_from_pipeline(self, tmp_path, env_live, mock_pdb_bytes):
         """PRD §13.4: output_pdb_path must be the path returned from pipeline."""
