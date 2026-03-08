@@ -1,0 +1,39 @@
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "command": "echo '[ECC] File modified — consider running tsc --noEmit'",
+        "description": "TypeScript change reminder"
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "command": "node /Users/lskarada/documents/ycbio/.claude/scripts/session-start.js",
+        "description": "Load project context"
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "command": "node /Users/lskarada/documents/ycbio/.claude/scripts/session-end.js",
+        "description": "Save session state"
+      }
+    ]
+  }
+}
