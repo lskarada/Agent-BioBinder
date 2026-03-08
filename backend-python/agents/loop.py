@@ -8,6 +8,10 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from tools.tamarind import TamarindFailedError, TamarindTimeoutError
+
 BASE_DIR = Path(__file__).parent.parent
 STATE_FILE = BASE_DIR / "state.json"
 LOGS_DIR = BASE_DIR / "outputs" / "logs"
@@ -64,27 +68,76 @@ async def run_loop(run_id: str) -> None:
             _write_state(status="strategist_running", iteration=iteration)
             strategy = await run_strategist(run_id, iteration, previous_feedback)
 
-            # ── 2. Architect ───────────────────────────────────────────────────
-            _write_state(status="architect_running")
-            pdb_path = await run_architect(run_id, iteration, strategy)
+            # ── 2–4. Architect → Tamarind → Critic (with one retry on transient errors) ──
+            critique = None
 
-            # Detect if fallback was used (tamarind.py copies mock file)
-            mock_src = BASE_DIR / "outputs" / "mock_fallbacks" / "cxcl12_success.pdb"
-            if mock_src.exists():
-                # Check if pdb content matches fallback
-                expected = Path(pdb_path)
-                if expected.exists() and expected.stat().st_size == mock_src.stat().st_size:
-                    mode = "fallback"
-                    _write_state(mode="fallback")
+            for attempt in range(2):
+                if attempt == 1:
+                    _write_state(status="retry_pending")
+                    _append_log(
+                        run_id, "loop", "retry_attempt",
+                        f"Retrying iteration {iteration} after transient error (attempt 2/2)",
+                        level="warning",
+                    )
 
-            # ── 3. Awaiting bio API (already resolved, update status) ──────────
-            _write_state(status="awaiting_bio_api")
-            # pdb_path is already resolved by Architect/Tamarind
-            final_pdb_path = pdb_path
+                try:
+                    # ── 2. Architect ───────────────────────────────────────────
+                    _write_state(status="architect_running")
+                    pdb_path = await run_architect(run_id, iteration, strategy)
 
-            # ── 4. Critic ──────────────────────────────────────────────────────
-            _write_state(status="critic_running")
-            critique = evaluate(pdb_path, run_id=run_id)
+                    # Detect if fallback was used (tamarind.py copies mock file)
+                    mock_src = BASE_DIR / "outputs" / "mock_fallbacks" / "cxcl12_success.pdb"
+                    if mock_src.exists():
+                        expected = Path(pdb_path)
+                        if expected.exists() and expected.stat().st_size == mock_src.stat().st_size:
+                            mode = "fallback"
+                            _write_state(mode="fallback")
+
+                    # ── 3. Awaiting bio API (already resolved, update status) ──
+                    _write_state(status="awaiting_bio_api")
+                    final_pdb_path = pdb_path
+
+                    # ── 4. Critic ──────────────────────────────────────────────
+                    _write_state(status="critic_running")
+                    critique = evaluate(pdb_path, run_id=run_id)
+                    break  # success — exit retry loop
+
+                except (TamarindTimeoutError, TamarindFailedError, json.JSONDecodeError, ValidationError) as e:
+                    _append_log(
+                        run_id, "loop", "transient_error",
+                        f"Transient error on iteration {iteration}, attempt {attempt + 1}: {e}",
+                        level="warning",
+                    )
+                    if attempt == 1:
+                        previous_feedback = f"Transient error after retry: {e}. Try different parameters."
+                        _append_log(
+                            run_id, "loop", "retry_exhausted",
+                            f"Iteration {iteration} failed after retry: {e}",
+                            level="error",
+                        )
+                        critique = None
+                        break
+
+                except Exception as e:
+                    # Catches BioPython parse failures from evaluate() and other unexpected errors
+                    _append_log(
+                        run_id, "loop", "transient_error",
+                        f"Unexpected error on iteration {iteration}, attempt {attempt + 1}: {e}",
+                        level="warning",
+                    )
+                    if attempt == 1:
+                        previous_feedback = f"Evaluator error after retry: {e}. Try a different structure."
+                        _append_log(
+                            run_id, "loop", "retry_exhausted",
+                            f"Iteration {iteration} failed after retry: {e}",
+                            level="error",
+                        )
+                        critique = None
+                        break
+
+            if critique is None:
+                # Transient failure exhausted retries — continue to next iteration
+                continue
 
             # Update metrics in state
             _write_state(
@@ -102,7 +155,7 @@ async def run_loop(run_id: str) -> None:
                 shutil.copy2(pdb_path, final_dest)
 
                 final_pdb_url = f"/outputs/pdbs/{final_name}"
-                status = "completed_success_fallback" if mode == "fallback" else "completed_success"
+                status = "completed_success_fallback" if mode == "fallback" else "completed_success_live"
 
                 _write_state(
                     status=status,

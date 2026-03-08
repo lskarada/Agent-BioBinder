@@ -1,0 +1,46 @@
+CXCL12 / CXCR4 Binding Site — Curated Literature Excerpt
+==========================================================
+Sources:
+  Veldkamp et al. (2008) Science 362:1106–1109  PMID 18799424  PDB 2K05
+  Burns et al. (2013) Biochemistry 52:1263–1270  PMC3783652
+
+KEY STRUCTURAL FINDINGS
+-----------------------
+The CXCL12–CXCR4 interaction has two distinct contacts:
+  Site I  – the chemokine N-terminus inserts into the transmembrane bundle of CXCR4
+  Site II – the receptor N-terminal domain (including sulfotyrosine sTyr21) docks on the
+            surface of the chemokine body; this is the surface targeted by designed binders
+
+sTyr21 RECOGNITION CLEFT (primary anchor zone)
+-----------------------------------------------
+sTyr21 of CXCR4 binds a shallow cleft on CXCL12 formed by residues of the N-loop and the
+β3 strand. NMR NOE correlations from Veldkamp et al. identify three CXCL12 residues within
+5 Å of the sTyr21 phenyl ring:
+
+  Val18  — apolar packing contact against sTyr21 ring (N-loop residue)
+  Arg47  — salt-bridge partner for CXCR4 Glu15 and Asp22; also H-bonds Thr13
+           R47E mutant completely abolishes CXCR4-stimulated chemotaxis (Burns et al.)
+           Most critical single residue in Site II interaction
+  Val49  — additional apolar contact on the β3 strand; V49A considerably impairs activity
+
+Together Val18–Arg47–Val49 constitute the primary anchor zone for any designed binder
+targeting the receptor-recognition surface of CXCL12.
+
+SECONDARY HYDROPHOBIC SURFACE (extension zone)
+-----------------------------------------------
+Adjacent to the primary cleft is a secondary apolar patch that can accommodate extension of
+a binder beyond the sTyr21 contact. Residues forming this patch:
+
+  Pro10  — N-loop rigidity element; part of the hydrophobic surface
+  Leu29  — β1–β2 loop; apolar side chain faces solvent-exposed groove
+  Val39  — β2 strand; close-packing contact with binder extensions
+
+Binders that reach this secondary surface can gain additional affinity without disrupting
+the critical Arg47 salt bridges.
+
+SUMMARY
+-------
+Primary anchor zone   : Val18, Arg47, Val49
+Secondary extension   : Pro10, Leu29, Val39
+Binding mode          : Competitive displacement of CXCR4 N-terminal domain
+Most critical residue : Arg47 (electrostatic hub; loss kills activity)

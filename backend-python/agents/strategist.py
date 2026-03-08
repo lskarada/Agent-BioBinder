@@ -14,18 +14,49 @@ LOGS_DIR = Path(__file__).parent.parent / "outputs" / "logs"
 
 # ── Output schema ──────────────────────────────────────────────────────────────
 
+class BindingHypothesis(BaseModel):
+    primary_anchor_zone: list[str]
+    secondary_extension_zone: list[str]
+    mode: str
+
+
+class DesignConstraints(BaseModel):
+    min_length: int
+    max_length: int
+    desired_flexibility: str
+    topology_hint: str
+    avoid_excess_bulk_near: str
+
+
 class StrategistOutput(BaseModel):
     target_id: str
-    binding_hypothesis: dict  # primary_anchor_zone, secondary_extension_zone, mode
-    design_constraints: dict  # min_length, max_length, desired_flexibility, topology_hint, avoid_excess_bulk_near
+    binding_hypothesis: BindingHypothesis
+    design_constraints: DesignConstraints
     rationale: str
 
 
-SYSTEM_PROMPT = """You are a structural biology expert designing peptide binders.
-Target: CXCL12 — a small chemokine (8.5 kDa) central to CXCL12–CXCR4 signaling implicated in tumor metastasis.
-Primary anchor zone: Val18, Arg47, Val49 (sTyr21-recognition cleft).
-Secondary extension zone: Pro10, Leu29, Val39 (adjacent hydrophobic surface).
-Design goal: A peptide that engages the receptor-recognition surface as a structural hypothesis. Not a validated therapeutic."""
+BASE_SYSTEM_PROMPT = """You are a structural biology expert designing peptide binders.
+You will be given published literature about the target protein. Read it carefully and
+use it — not prior assumptions — to derive the binding site, anchor residues, and design
+constraints. Design goal: a compact peptide that engages the receptor-recognition surface.
+Not a validated therapeutic."""
+
+
+def _load_literature() -> str:
+    lit_dir = Path(__file__).parent.parent / "literature"
+    if not lit_dir.exists():
+        return ""
+    texts = []
+    for path in sorted(lit_dir.glob("*.txt")):
+        texts.append(f"=== {path.name} ===\n{path.read_text().strip()}")
+    return "\n\n".join(texts)
+
+
+def _build_system_prompt() -> str:
+    literature = _load_literature()
+    if not literature:
+        return BASE_SYSTEM_PROMPT
+    return BASE_SYSTEM_PROMPT + "\n\n## Literature\n" + literature
 
 
 def _build_user_prompt(iteration: int, feedback: str | None) -> str:
@@ -34,9 +65,7 @@ def _build_user_prompt(iteration: int, feedback: str | None) -> str:
         feedback_section = f"\nCritic feedback from previous iteration: {feedback}\n"
     return (
         f"Iteration {iteration}.{feedback_section}\n"
-        "Generate binding design constraints as JSON matching the StrategistOutput schema.\n"
-        "Prefer compact_turn_or_helical_motif. Binder length 8–18 residues.\n"
-        "Avoid excess bulk near Arg47."
+        "Generate binding design constraints as JSON matching the StrategistOutput schema."
     )
 
 
@@ -63,9 +92,9 @@ async def run_strategist(run_id: str, iteration: int, previous_feedback: str | N
     _append_log(run_id, f"Strategist starting iteration {iteration}", event="start")
 
     response = await client.beta.chat.completions.parse(
-        model="gpt-4o",  # use gpt-4o as gpt-4.1 may not be available; swap to "gpt-4.1" when accessible
+        model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": _build_system_prompt()},
             {"role": "user", "content": _build_user_prompt(iteration, previous_feedback)},
         ],
         response_format=StrategistOutput,
@@ -76,8 +105,8 @@ async def run_strategist(run_id: str, iteration: int, previous_feedback: str | N
     _append_log(
         run_id,
         f"Anchoring design around sTyr21-recognition cleft. "
-        f"Binder length {result.design_constraints.get('min_length', '?')}–"
-        f"{result.design_constraints.get('max_length', '?')}. "
+        f"Binder length {result.design_constraints.min_length}–"
+        f"{result.design_constraints.max_length}. "
         f"Rationale: {result.rationale}",
     )
 

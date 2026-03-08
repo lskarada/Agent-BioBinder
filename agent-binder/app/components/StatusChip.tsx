@@ -12,7 +12,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   architect_running: { label: "Architect", color: "bg-indigo-900/50 text-indigo-300" },
   awaiting_bio_api: { label: "Tamarind", color: "bg-cyan-900/50 text-cyan-300" },
   critic_running: { label: "Critic", color: "bg-amber-900/50 text-amber-300" },
-  completed_success: { label: "Success", color: "bg-green-900/50 text-green-300" },
+  completed_success_live: { label: "Success", color: "bg-green-900/50 text-green-300" },
   completed_success_fallback: { label: "Success (Fallback)", color: "bg-teal-900/50 text-teal-300" },
   completed_failure: { label: "Failed", color: "bg-red-900/50 text-red-400" },
   error: { label: "Error", color: "bg-red-900/50 text-red-400" },
@@ -20,7 +20,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 export function StatusChip({ status }: StatusChipProps) {
   const config = STATUS_CONFIG[status] ?? { label: status, color: "bg-gray-700 text-gray-300" };
-  const isRunning = !["idle", "completed_success", "completed_success_fallback", "completed_failure", "error"].includes(status);
+  const isRunning = !["idle", "completed_success_live", "completed_success_fallback", "completed_failure", "error"].includes(status);
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${config.color}`}>

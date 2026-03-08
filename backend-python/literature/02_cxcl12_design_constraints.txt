@@ -1,0 +1,47 @@
+CXCL12 Peptide Binder Design Constraints — Curated Literature Excerpt
+======================================================================
+Sources:
+  Jiang et al. (2014) J. Chem. Inf. Model. 54:1263–1272  PMC4004218
+  Sharma et al. (2020) Int. J. Mol. Sci. 21:7765          PMC7594044
+
+POCKET GEOMETRY
+---------------
+The sTyr21-recognition site on CXCL12 is shallow and concave — it is not a deep
+enclosed pocket but a broad surface groove. Implications for binder design:
+
+  • Compact binders of 8–18 residues fit best; larger domains create steric penalties
+  • Helical or compact-turn topology is preferred (aligns apolar face toward Val18/Val49,
+    charged/polar face toward Arg47)
+  • Extended β-strand conformations tend to miss simultaneous engagement of all three
+    primary anchor residues
+
+CONSTRAINTS NEAR ARG47
+-----------------------
+Arg47 is the electrostatic lynchpin of the binding interaction (see file 01). Design rules:
+
+  • Binders must remain slender (≤ ~8 Å wide) near the β3 strand to avoid displacing
+    Arg47's guanidinium from its salt-bridge geometry with Glu15/Asp22 of CXCR4
+  • Bulk or branching near the Arg47 contact disrupts both its salt bridges simultaneously,
+    reducing affinity sharply
+  • A single negatively charged or H-bond-accepting group positioned near Arg47 is
+    beneficial; multiple competing groups create entropic penalty
+
+CONTACTS AT VAL18 / VAL49
+--------------------------
+These two valines provide the apolar "floor" of the sTyr21 cleft:
+
+  • Binder residues that contact Val18 / Val49 should be aliphatic or aromatic (Ala, Val,
+    Leu, Phe, Trp — in decreasing order of steric tolerance)
+  • Polar or charged side chains at these positions reduce binding affinity
+  • V49A mutagenesis data confirm that even small reductions in apolar surface area at
+    position 49 considerably impair activity
+
+OVERALL DESIGN RULES
+--------------------
+  1. Length:          8–18 residues
+  2. Topology:        compact turn or short helix preferred over extended strand
+  3. Near Arg47:      keep slender; one anionic/H-bond contact is beneficial, excess
+                      bulk forbidden
+  4. Near Val18/Val49: apolar contacts preferred (Ala, Val, Leu, Phe)
+  5. Extension:       Pro10 / Leu29 / Val39 patch can accommodate hydrophobic extensions
+                      beyond the sTyr21 cleft to increase contact surface area

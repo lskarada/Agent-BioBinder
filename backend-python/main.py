@@ -84,7 +84,7 @@ async def start_loop(req: StartLoopRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Only CXCL12 target is supported")
 
     current = read_state()
-    if current.get("status", "idle") not in ("idle", "completed_success", "completed_success_fallback", "completed_failure", "error"):
+    if current.get("status", "idle") not in ("idle", "completed_success_live", "completed_success_fallback", "completed_failure", "error"):
         raise HTTPException(status_code=409, detail="A run is already in progress")
 
     run_id = "run_" + uuid.uuid4().hex[:8]

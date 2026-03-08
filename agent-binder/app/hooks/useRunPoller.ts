@@ -29,7 +29,7 @@ export interface RunState {
 }
 
 const TERMINAL_STATUSES = new Set([
-  "completed_success",
+  "completed_success_live",
   "completed_success_fallback",
   "completed_failure",
   "error",
