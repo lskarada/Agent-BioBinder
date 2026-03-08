@@ -344,7 +344,7 @@ async def run_rfdiffusion(
 
     _append_log(run_id, f"Polling RFdiffusion job '{job_name}'", event="rfd_poll")
     async with httpx.AsyncClient(timeout=60.0) as client:
-        await poll_until_complete(client, job_name, run_id, timeout_s=300)  # RFdiffusion: up to 5 min
+        await poll_until_complete(client, job_name, run_id, timeout_s=900)  # RFdiffusion: up to 15 min (queue + run)
 
         _append_log(run_id, f"Retrieving RFdiffusion result for '{job_name}'", event="rfd_result")
         result_url = await get_result_url(client, job_name)
@@ -383,7 +383,7 @@ async def run_proteinmpnn(
 
     _append_log(run_id, f"Polling ProteinMPNN job '{job_name}'", event="mpnn_poll")
     async with httpx.AsyncClient(timeout=60.0) as client:
-        await poll_until_complete(client, job_name, run_id, timeout_s=180)  # ProteinMPNN: up to 3 min
+        await poll_until_complete(client, job_name, run_id, timeout_s=300)  # ProteinMPNN: up to 5 min (queue + run)
 
         _append_log(run_id, f"Retrieving ProteinMPNN result for '{job_name}'", event="mpnn_result")
         result_url = await get_result_url(client, job_name)
@@ -422,7 +422,7 @@ async def run_boltz(
 
     _append_log(run_id, f"Polling Boltz job '{job_name}'", event="boltz_poll")
     async with httpx.AsyncClient(timeout=60.0) as client:
-        score_dict = await poll_until_complete(client, job_name, run_id, timeout_s=360)  # Boltz: up to 6 min
+        score_dict = await poll_until_complete(client, job_name, run_id, timeout_s=900)  # Boltz: up to 15 min (queue + run)
 
         _append_log(run_id, f"Retrieving Boltz result for '{job_name}'", event="boltz_result")
         result_url = await get_result_url(client, job_name)
