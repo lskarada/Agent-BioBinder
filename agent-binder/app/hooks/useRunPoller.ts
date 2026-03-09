@@ -15,6 +15,7 @@ export interface LogEntry {
 export interface Metrics {
   plddt_mean: number | null;
   steric_clashes: number | null;
+  iptm?: number | null;
 }
 
 export interface RunState {

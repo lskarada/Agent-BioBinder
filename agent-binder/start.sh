@@ -7,8 +7,19 @@ FRONTEND="$SCRIPT_DIR"
 # Activate venv
 source "$BACKEND/venv/bin/activate" || { echo "Run: cd backend-python && python -m venv venv && pip install -r requirements.txt"; exit 1; }
 
-# Start backend in background, capture PID
+# Load .env into environment before starting backend
 cd "$BACKEND"
+if [ -f .env ] && [ -s .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+  echo "Loaded .env"
+else
+  echo "WARN: .env missing or empty — add OPENAI_API_KEY, ANTHROPIC_API_KEY, and optionally TAMARIND_API_KEY"
+fi
+export DEMO_MODE=true
+echo "DEMO_MODE=true — running fail/fail/pass hardcoded data"
 uvicorn main:app --reload --port 8000 &
 BACKEND_PID=$!
 

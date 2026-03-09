@@ -12,7 +12,7 @@ const MolstarViewerInner = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center h-full text-gray-600 text-sm">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 11, color: "#555555", fontFamily: "'Lucida Console', monospace" }}>
         Loading viewer...
       </div>
     ),
@@ -21,15 +21,11 @@ const MolstarViewerInner = dynamic(
 
 export function MolstarViewer({ pdbUrl }: MolstarViewerProps) {
   if (!pdbUrl) {
-    return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl h-80 flex items-center justify-center">
-        <p className="text-gray-600 text-sm">3D structure will appear here after run completes</p>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl h-80 overflow-hidden">
+    <div style={{ width: "100%", height: "100%", minHeight: 180, overflow: "hidden", background: "#0a0a0a" }}>
       <MolstarViewerInner pdbUrl={pdbUrl} />
     </div>
   );
