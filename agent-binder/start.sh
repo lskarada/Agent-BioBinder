@@ -22,6 +22,8 @@ export DEMO_MODE=true
 echo "DEMO_MODE=true — running fail/fail/pass hardcoded data"
 uvicorn main:app --reload --port 8000 &
 BACKEND_PID=$!
+sleep 3
+echo "Backend ready at http://127.0.0.1:8000"
 
 # Cleanup on exit
 cleanup() { kill $BACKEND_PID 2>/dev/null; exit 0; }

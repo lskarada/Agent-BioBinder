@@ -125,7 +125,7 @@ function getIterationAndContext(ctx: FormatContext): { iteration: number; strate
 /** Convert raw log messages to shorter, conversational text — builds on previous messages per iteration */
 function formatConversationalMessage(agent: string, event: string, message: string, ctx?: FormatContext): string {
   const m = message ?? "";
-  const { iteration, strategistSummary, lastCriticSummary } = ctx ? getIterationAndContext(ctx) : { iteration: 1, strategistSummary: "", lastCriticSummary: "" };
+  const { iteration, strategistSummary } = ctx ? getIterationAndContext(ctx) : { iteration: 1, strategistSummary: "" };
 
   if (agent === "strategist") {
     if (event === "start") {
@@ -200,10 +200,10 @@ function formatConversationalMessage(agent: string, event: string, message: stri
     if (event === "pipeline_done") {
       return iteration === 1 ? "Evaluating structure from first design…" : `Evaluating iteration ${iteration} structure…`;
     }
-    if (m.includes("Evaluation pass") || m.includes("Passed")) {
+    if (event === "evaluation_pass" || m.includes("Evaluation pass") || m.includes("Passed")) {
       return m.length > 600 ? m.slice(0, 600) + "…" : m;
     }
-    if (m.includes("Evaluation fail") || m.includes("Failure")) {
+    if (event === "evaluation_fail" || m.includes("Evaluation fail") || m.includes("Failure")) {
       return m.length > 600 ? m.slice(0, 600) + "…" : m;
     }
   }
@@ -245,7 +245,7 @@ function partitionLogsByCycle(logs: LogEntry[]): Record<number, LogEntry[]> {
 
   for (let i = 0; i < logs.length; i++) {
     const log = logs[i];
-    if (log.agent === "critic" && (log.message.includes("Evaluation fail") || log.message.includes("Evaluation pass"))) {
+    if (log.agent === "critic" && (log.event === "evaluation_fail" || log.event === "evaluation_pass")) {
       result[cycle as 1 | 2 | 3] = logs.slice(startIdx, i + 1);
       startIdx = i + 1;
       cycle = Math.min(cycle + 1, 3);
@@ -268,16 +268,17 @@ function extractIterationMetricsFromLogs(logs: LogEntry[]): IterationMetric[] {
   const result: IterationMetric[] = [];
   for (const log of logs) {
     if (log.agent !== "critic") continue;
+    if (log.event !== "evaluation_fail" && log.event !== "evaluation_pass") continue;
     const msg = log.message ?? "";
-    if (!msg.includes("Evaluation fail") && !msg.includes("Evaluation pass")) continue;
 
     const plddtMatch = msg.match(/pLDDT=([\d.]+)/i)
+      ?? msg.match(/pLDDT\s+([\d.]+)/i)
       ?? msg.match(/pLDDT\s+mean:\s*([\d.]+)/i)
       ?? msg.match(/plddt[_\s]*(?:mean)?:\s*([\d.]+)/i);
-    const clashMatch = msg.match(/clashes=(\d+)/i) ?? msg.match(/steric\s+clashes?:\s*(\d+)/i) ?? msg.match(/clashes?:\s*(\d+)/i);
+    const clashMatch = msg.match(/steric_clashes=(\d+)/i) ?? msg.match(/clashes=(\d+)/i) ?? msg.match(/steric\s+clashes?:\s*(\d+)/i) ?? msg.match(/clashes?:\s*(\d+)/i);
     const plddtVal = plddtMatch ? parseFloat(plddtMatch[1]) : NaN;
     const clashVal = clashMatch ? parseInt(clashMatch[1], 10) : 0;
-    const pass = msg.includes("Evaluation pass") || (!isNaN(plddtVal) && plddtVal > 80 && clashVal === 0);
+    const pass = log.event === "evaluation_pass" || (!isNaN(plddtVal) && plddtVal > 80 && clashVal === 0);
 
     if (!isNaN(plddtVal)) {
       result.push({ cycle: result.length + 1, plddt: plddtVal, clashes: clashVal, pass });
@@ -743,7 +744,7 @@ export default function Dashboard() {
                 </a>
               )}
             </div>
-            <div style={{ height: 200 }}>
+            <div style={{ height: 380 }}>
               {finalPdbUrl ? (
                 <MolstarViewer pdbUrl={finalPdbUrl} />
               ) : (

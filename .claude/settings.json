@@ -17,23 +17,13 @@
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
-        "command": "echo '[ECC] File modified — consider running tsc --noEmit'",
-        "description": "TypeScript change reminder"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[ECC] File modified — consider running tsc --noEmit'"
+          }
+        ]
       }
     ],
-    "SessionStart": [
-      {
-        "matcher": "",
-        "command": "node /Users/lskarada/documents/ycbio/.claude/scripts/session-start.js",
-        "description": "Load project context"
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "command": "node /Users/lskarada/documents/ycbio/.claude/scripts/session-end.js",
-        "description": "Save session state"
-      }
-    ]
   }
 }

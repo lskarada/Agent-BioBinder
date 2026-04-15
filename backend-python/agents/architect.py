@@ -131,7 +131,12 @@ def _parse_rfd_settings(text: str, fallback_min: int, fallback_max: int, default
 
 # ── Main entry point ────────────────────────────────────────────────────────────
 
-async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput) -> tuple[str, dict | None]:
+async def run_architect(
+    run_id: str,
+    iteration: int,
+    strategy: StrategistOutput,
+    previous_metrics: dict | None = None,
+) -> tuple[str, dict | None]:
     """
     Orchestrates: Claude(settings) → RFdiffusion → ProteinMPNN → Boltz.
 
@@ -169,10 +174,29 @@ async def run_architect(run_id: str, iteration: int, strategy: StrategistOutput)
     claude = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     constraints_dict = constraints.model_dump()
     binding_dict = strategy.binding_hypothesis.model_dump()
+    # Build numeric feedback section if previous critic metrics are available
+    metrics_section = ""
+    if previous_metrics:
+        plddt = previous_metrics.get("plddt_mean", "N/A")
+        clashes = previous_metrics.get("steric_clashes", "N/A")
+        iptm = previous_metrics.get("iptm", "N/A")
+        metrics_section = (
+            f"\nPrevious iteration critic metrics: pLDDT={plddt}, inter-chain clashes={clashes}, iptm={iptm}.\n"
+            f"Adjustment rules:\n"
+            f"- If pLDDT < 60: reduce binderLength upper bound by 30% (more compact → higher confidence)\n"
+            f"- If clashes > 5: reduce binderLength upper bound by 20% (shorter binder = less penetration)\n"
+            f"- Apply both if both conditions hold\n"
+        )
+        # Shrink upper bound based on metric failures
+        if isinstance(plddt, (int, float)) and plddt < 60:
+            max_len = max(min_len + 2, int(max_len * 0.7))
+        if isinstance(clashes, int) and clashes > 5:
+            max_len = max(min_len + 2, int(max_len * 0.8))
+
     user_message = (
         f"Strategist constraints (iteration {iteration}):\n"
         f"{json.dumps({'binding_hypothesis': binding_dict, 'design_constraints': constraints_dict}, indent=2)}\n\n"
-        f"Binder length range: {min_len}–{max_len}.\n"
+        f"Binder length range: {min_len}–{max_len}.{metrics_section}\n"
         "Output the RFdiffusion settings JSON."
     )
 

@@ -55,6 +55,7 @@ async def run_loop(run_id: str) -> None:
 
     max_iterations = int(os.environ.get("MAX_ITERATIONS", "3"))
     previous_feedback: str | None = None
+    previous_metrics: dict | None = None
     final_pdb_path: str | None = None
     mode = "live"
 
@@ -83,7 +84,9 @@ async def run_loop(run_id: str) -> None:
                 try:
                     # ── 2. Architect ───────────────────────────────────────────
                     _write_state(status="architect_running")
-                    pdb_path, boltz_scores = await run_architect(run_id, iteration, strategy)
+                    pdb_path, boltz_scores = await run_architect(
+                        run_id, iteration, strategy, previous_metrics=previous_metrics
+                    )
 
                     # Detect if fallback was used (tamarind.py copies mock file)
                     mock_src = BASE_DIR / "outputs" / "mock_fallbacks" / "cxcl12_success.pdb"
@@ -169,8 +172,13 @@ async def run_loop(run_id: str) -> None:
                 )
                 return
 
-            # ── Iteration failed — pass feedback to next Strategist call ───────
+            # ── Iteration failed — pass feedback and metrics to next iteration ──
             previous_feedback = critique.get("feedback_to_strategist") or "Improve binding geometry."
+            previous_metrics = {
+                "plddt_mean": critique["plddt_mean"],
+                "steric_clashes": critique["steric_clashes"],
+                "iptm": critique.get("iptm"),
+            }
             _append_log(
                 run_id, "loop", "iteration_fail",
                 f"Iteration {iteration} failed: {critique['failure_reasons']}. Feedback: {previous_feedback}",

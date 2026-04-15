@@ -12,7 +12,7 @@ from Bio import PDB
 LOGS_DIR = Path(__file__).parent.parent / "outputs" / "logs"
 
 PLDDT_THRESHOLD = 80.0   # PRD §11.2
-CLASH_DISTANCE  = 1.5    # Angstroms
+CLASH_DISTANCE  = 1.2    # Angstroms — inter-chain only; 1.2Å standard for raw ML predictions
 IPTM_THRESHOLD  = 0.8    # Boltz interface confidence (≥0.8 = high quality)
 
 
@@ -90,15 +90,22 @@ def evaluate(
             _append_log(run_id, "No atoms found in PDB", event="evaluation_error", level="error")
         return result
 
-    # pLDDT from B-factor column (RFDiffusion / AF2 output convention)
+    # pLDDT from B-factor column (RFDiffusion / AF2 / Boltz output convention)
     bfactors = [atom.get_bfactor() for atom in atoms]
     plddt_mean = float(np.mean(bfactors))
+    # Boltz writes pLDDT on 0–1 scale; normalize to 0–100 for threshold comparison
+    if plddt_mean < 2.0:
+        plddt_mean *= 100.0
 
-    # Steric clashes: O(n²) — fine for short peptides ≤20 residues
+    # Inter-chain steric clashes only — intra-chain clashes are expected in raw ML output
+    def _chain_id(atom) -> str:
+        return atom.get_parent().get_parent().get_id()
+
     clashes = 0
     for i, a1 in enumerate(atoms):
-        for a2 in atoms[i + 2:]:  # skip i+1 (likely bonded neighbor)
-            if (a1 - a2) < CLASH_DISTANCE:
+        chain1 = _chain_id(a1)
+        for a2 in atoms[i + 1:]:
+            if chain1 != _chain_id(a2) and (a1 - a2) < CLASH_DISTANCE:
                 clashes += 1
 
     plddt_ok = plddt_mean > PLDDT_THRESHOLD
